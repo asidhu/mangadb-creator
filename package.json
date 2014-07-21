@@ -1,0 +1,9 @@
+{ "name" : "mangdb-creator",
+ "version" : "0.0.1",
+ "dependencies" : 
+	{	"cheerio" : "0.17.0",
+		"mongojs" : "0.13.0",
+		"natural" : "0.1.27",
+		"request" : "2.37.0"
+	}
+}
