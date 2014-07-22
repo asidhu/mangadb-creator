@@ -1,20 +1,21 @@
 module.exports = {
 	name:"EatManga",
+	numAttempts:1,
 	defaultTimeout:500,
 	failureTimeouts:[500,10000,120000,300000],
 	grabAll:EatManga_grabAll,
 	grabSeriesDetails:EatManga_grabSeriesDetails,
-	grabChapterImages:EatManga_grabChapterImages
+	grabChapterPages:EatManga_grabChapterPages,
+	extractImage:EatManga_extractImage
 };
 
 var common =  require("./providers-common.js");
 var requestAPI = common.requestAPI;
-var batchRequestAPI = common.linearBatchRequestAPI;
 
 var EatManga_ROOTURL = "http://eatmanga.com";
 var EatManga_SERIESDIR = "http://eatmanga.com/Manga-Scan/";
-function EatManga_grabAll(cb){
-	requestAPI(EatManga_SERIESDIR, function($,cb){
+function EatManga_grabAll(success,failure){
+	requestAPI(EatManga_SERIESDIR, function($){
 		var series =[];
 		$("table#updates th a").each(function(idx,ele){
 			series[series.length] = {
@@ -22,14 +23,13 @@ function EatManga_grabAll(cb){
 				url: EatManga_ROOTURL+$(ele).attr("href")
 			};
 		});
-		cb(undefined, series);
-	},cb);
+		success(series);
+	},failure);
 }
 
 // Get information for the series
-function EatManga_grabSeriesDetails(series,cb){
-	if(!series || !series.url){cb({msg:"Series not of expected format...",series:series}); return;}//throw some exception?
-	requestAPI(series.url, function($,cb){
+function EatManga_grabSeriesDetails(series,success,failure){
+	requestAPI(series.url, function($){
 			//get images
 			var imgs=$("td#info img");
 			if(imgs.length>0){
@@ -89,36 +89,30 @@ function EatManga_grabSeriesDetails(series,cb){
 			}
 			
 			
-			cb(undefined,series);
+			success(series);
 		
-	},cb);
+	},failure);
 }
 
-function EatManga_grabChapterImages(chapter,cb){
-if(!chapter || !chapter.url){cb({msg:"Series not of expected format...",series:series}); return;}//throw some exception?
-	requestAPI(chapter.url, function($,cb){
+function EatManga_grabChapterPages(chapter,success,failure){
+	requestAPI(chapter.url, function($){
 			//find all pages
 			chapter.pages=[];
-			chapter.imgs=[];
-			chapter.imgsFound=0;
+			chapter.imgs={};
 			var allPages=$("select#pages").first().find("option");
 			chapter.numpages = allPages.length;
 			allPages.each(function(idx,ele){
 				chapter.pages[chapter.pages.length] = EatManga_ROOTURL+$(ele).attr("value");
 			});
-			var set = [];
-			
-			
-			
-			for(var i=0;i<chapter.pages.length;i++){
-				if(!chapter.pages[i])
-					console.log("G'DAMNIT!");
-				set[i]={url:chapter.pages[i]};
-			}
-			batchRequestAPI(set,function(idx,url,$){
-				chapter.imgs[idx]=$("img#eatmanga_image, img#eatmanga_image_big").attr("src");
-				chapter.imgsFound++;
-			}
-			,{timeout:1000,tries:5, onFinished:function(error){cb(error,chapter);}});
-	},cb);
+			var img =$("img#eatmanga_image, img#eatmanga_image_big").attr("src");
+			chapter.imgs[chapter.pages[0]]=img;
+			success(chapter);
+	},failure);
+}
+function EatManga_extractImage(chapter,idx,success,failure){
+	requestAPI(chapter.pages[idx], function($){
+		var img =$("img#eatmanga_image, img#eatmanga_image_big").attr("src");
+		chapter.imgs[chapter.pages[idx]]=img;
+		success(img);
+	},failure);
 }

@@ -1,20 +1,21 @@
 module.exports = {
 	name:"MangaReader",
-	defaultTimeout:500,
+	numAttempts:10,
+	defaultTimeout:100,
 	failureTimeouts:[500,10000,120000,300000],
 	grabAll:MangaReader_grabAll,
 	grabSeriesDetails:MangaReader_grabSeriesDetails,
-	grabChapterImages:MangaReader_grabChapterImages
+	grabChapterPages:MangaReader_grabChapterPages,
+	extractImage:MangaReader_extractImage
 };
 var common =  require("./providers-common.js");
 var requestAPI = common.requestAPI;
-var batchRequestAPI = common.linearBatchRequestAPI;
 
 
 var MangaReader_ROOTURL = "http://www.mangareader.net";
 var MangaReader_SERIESDIR = "http://www.mangareader.net/alphabetical";
-function MangaReader_grabAll(cb){
-	requestAPI(MangaReader_SERIESDIR, function($,cb){
+function MangaReader_grabAll(success,failure){
+	requestAPI(MangaReader_SERIESDIR, function($){
 			var series =[];	
 			$("div.series_col div.series_alpha ul li a").each(function(idx,ele){
 				series[series.length] = {
@@ -22,14 +23,14 @@ function MangaReader_grabAll(cb){
 					url: MangaReader_ROOTURL+$(ele).attr("href")
 				};
 			});
-			cb(undefined,series);
+			success(series);
 	
-	},cb);
+	},failure);
 }
 
 // Get information for the series
-function MangaReader_grabSeriesDetails( series,cb){
-	requestAPI(series.url, function($,cb){
+function MangaReader_grabSeriesDetails( series,success,failure){
+	requestAPI(series.url, function($){
 			//get images
 			var imgs=$("div#mangaimg img");
 			if(imgs.length>0){
@@ -107,32 +108,31 @@ function MangaReader_grabSeriesDetails( series,cb){
 					console.log("WTF");
 				}
 			}
-			cb(undefined,series);
+			success(series);
 	
-	},cb);
+	},failure);
 }
 
-function MangaReader_grabChapterImages(chapter,cb){
-	requestAPI(chapter.url, function($,cb){
+function MangaReader_grabChapterPages(chapter,success,failure){
+	requestAPI(chapter.url, function($){
 			//find all pages
 			chapter.pages=[];
-			chapter.imgs=[];
-			chapter.imgsFound=0;
+			chapter.imgs={};
 			var allPages=$("select#pageMenu option");
 			chapter.numpages = allPages.length;
 			allPages.each(function(idx,ele){
 				chapter.pages[chapter.pages.length] = MangaReader_ROOTURL+$(ele).attr("value");
 			});
-			var set =[];
-			
-			for(var i=0;i<chapter.pages.length;i++){
-				set = {url:chapter.pages[i]};
-			}
-			batchRequestAPI(set,function(idx,url,$){
-				chapter.imgs[idx]=$("div#imgholder img").attr("src");
-				chapter.imgsFound++;
-			}
-			,{timeout:1000,tries:5, onFinished:function(error){cb(error,chapter);}});
-		
-	},cb);
+			var img =$("div#imgholder img").attr("src");
+			chapter.imgs[chapter.pages[0]]=img;
+			success(img);
+	},failure);
+}
+
+function MangaReader_extractImage(chapter,idx,success,failure){
+	requestAPI(chapter.pages[idx], function($){
+		var img =$("div#imgholder img").attr("src");
+		chapter.imgs[chapter.pages[idx]]=img;
+		success(img);
+	},failure);
 }

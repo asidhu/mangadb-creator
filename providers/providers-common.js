@@ -7,17 +7,18 @@ linearBatchRequestAPI:linearBatchRequestAPI
 
 var request = require("request");
 var cheerio = require("cheerio");
-function requestAPI(url, success, callback){
+function requestAPI(url, success, failure){
 	request(url, function(error,response,html){
 		if(!error && response.statusCode == 200){
 			var $ = cheerio.load(html);
-			success($,callback);
+			success($);
 		}
 		else{
-			if(error)
-				callback(error);
-			else
-				callback({msg:"HTTP Request failed...",http:response});
+			if(error){
+				if(failure)failure(error);
+			}
+			else if(failure)
+				failure({msg:"HTTP Request failed...",http:response});
 		}
 	
 	});
