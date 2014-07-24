@@ -12,7 +12,6 @@ var numProvidersFound=0;
 var numProvidersNeeded=providerAPI.providers.length;
 var numSeriesFound=0;
 var numSeriesNeeded=0;
-var seriesDB={};
 var seriesArray=[];
 var grabAllSuccessCreator = function(idx){
 	return function(series){
@@ -38,24 +37,8 @@ var grabSeriesDetsSuccessCreator = function(pid){ return function(series){
 	//ADD TO MY DATA STRUCTURE
 	seriesArray[s_id]= series;
 	s_id++;
-	if(series.name){
-		if(series.name in seriesDB)
-			seriesDB[series.name].push(series);
-		else
-			seriesDB[series.name]=[series];
-	}
-	if(series.alternatetitles){
-		for( var i=0;i<series.alternatetitles.length;i++){
-			var name = series.alternatetitles[name];
-			if(name in seriesDB)
-				seriesDB[name].push(series);
-			else
-				seriesDB[name]=[series];
-		}
-	}
 	if(numProvidersFound>=numProvidersNeeded && numSeriesFound>=numSeriesNeeded){
 		console.log("found all series required begin crosslinking");
-		fs.writeFile("seriesDB.json",JSON.stringify(seriesDB));
 		fs.writeFile("seriesArray.json",JSON.stringify(seriesArray));
 	}
 }};

@@ -48,7 +48,11 @@ function MangaReader_grabSeriesDetails( series,success,failure){
 						arr[idx]=ele.trim();
 						return true;
 					});
-					series.alternatetitles = titles;
+					titles.filter(function(ele,idx,arr){
+						return ele.split('').filter(function(ele,idx,arr){return ele!="?";}).length>0;
+					});
+					if(titles.length>0)
+						series.alternatetitles = titles;
 				}
 			
 			
