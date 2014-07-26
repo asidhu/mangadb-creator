@@ -129,7 +129,7 @@ function MangaReader_grabChapterPages(chapter,success,failure){
 			});
 			var img =$("div#imgholder img").attr("src");
 			chapter.imgs[chapter.pages[0]]=img;
-			success(img);
+			success(chapter);
 	},failure);
 }
 

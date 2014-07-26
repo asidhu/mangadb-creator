@@ -1,7 +1,7 @@
 module.exports = {
 	name:"EatManga",
 	numAttempts:1,
-	defaultTimeout:400,
+	defaultTimeout:1000,
 	failureTimeouts:[500,10000,120000,300000],
 	grabAll:EatManga_grabAll,
 	grabSeriesDetails:EatManga_grabSeriesDetails,

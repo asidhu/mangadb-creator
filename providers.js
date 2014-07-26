@@ -21,20 +21,20 @@ function RequestQueue(){
 		if(this.attempts>this.provider.numAttempts){
 			this.attempts=0;
 			this.errors=[];
-			this.queue.splice(0,1);// remove first item from queue
+			options.reqhandler.erase(this.queue);// remove first item from queue
 		}
 		if(this.queue.length<=0){
 			this.timerObject=undefined;
 			return;
 		}
 		var handler = this;
-		var req = this.queue[0];
+		var req = options.reqhandler.pop(this.queue);
 		var provider = req.provider;
 		var onfailtimeout = provider.failureTimeouts[this.attempts] || provider.failureTimeouts[provider.failureTimeouts.length-1] || provider.defaultTimeout || 500;
 		var onsuccesstimeout = provider.defaultTimeout || 500;
 		var success = function(arg){
 			handler.timerObject=setTimeout(function(){handler.handleRequests();},onsuccesstimeout);
-			handler.queue.splice(0,1);
+			options.reqhandler.erase(handler.queue);
 			req.success(arg);
 			handler.attempts=0;
 			handler.errors=[];
@@ -131,7 +131,33 @@ function extractImage(provider, chapter,idx, success,failure){
 	};
 	handlers[provider.name].pushRequest(req);
 }
+
+var FIFO ={
+	pop:function(queue){
+		return queue[0];
+	},
+	erase:function(queue){
+	
+		queue.splice(0,1);
+	}
+};
+var LIFO ={
+	pop:function(queue){
+		return queue[queue.length-1];
+	},
+	erase:function(queue){
+		queue.splice(queue.length-1,1);
+	}
+};
+
+
+var options= {
+	reqhandler:FIFO
+};
 module.exports= {
+	LIFO:LIFO,
+	FIFO:FIFO,
+	options: options,
 	providers:providers,
 	grabAll:grabAll,
 	grabSeriesDetails:grabSeriesDetails,
