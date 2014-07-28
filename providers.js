@@ -40,7 +40,7 @@ function RequestQueue(){
 			handler.errors=[];
 		};
 		var failure = function(arg){
-			handler.timerObject=setTimeout(function(){handler.handleRequests();},onfailuretimeout);
+			handler.timerObject=setTimeout(function(){handler.handleRequests();},onfailtimeout);
 			handler.errors.push(arg);
 			handler.attempts++;
 		};
