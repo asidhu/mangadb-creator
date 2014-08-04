@@ -2,98 +2,133 @@
 #include "algorithm.h"
 #include <stdio.h>
 #include <cstdlib>
+#include <utility>
+#include <algorithm>
 
 
 
 
-hash operator-(hash a, hash b){
-	hash c;
-	for (int i = 0; i < 16; i++){
-		uint64_t x = a.data[i];
-		uint64_t y = b.data[i];
-		uint64_t z = 0;
-		for (int j = 0; j < 16; j++){
-			unsigned char c1 = x & 0xF, c2 = y & 0xF;
-			x >>= 4; y >>= 4;
-			unsigned int sub = (unsigned int)std::abs(c1 - c2);
-			z <<= 4;
-			z |= sub;
-		}
+//algorithm v2
+/*
+	multi part hash.
+	1st part
+	gray scale
+	white and black normalization
+	calculate histogram of whole image, and store number of pixels for each of x bins.
+	These are indexed in mongodb and can be searched for by range in mongodb as pruning method.
+	2nd part
+	shrink image down to small size
+	divide up into smaller chunks	
+	histogram each of the chunks
+	sort the largest pixels for each bin of each block
+	record x number of blocks with large bins in hash.
+	
+	should match which bins were the biggest
 
-		for (int j = 0; j < 16; j++){
-			c.data[i] <<= 4;
-			c.data[i] |= z & 0xF;
-			z >>= 4;
+
+*/
+
+bool comp(std::pair<HASH2INTTYPE, HASH2INTBOXES> a, std::pair<HASH2INTTYPE, HASH2INTBOXES> b){
+	return a.first > b.first;
+}
+
+bool comp2(std::pair<HASH2INTTYPE, HASH2INTBOXES> a, std::pair<HASH2INTTYPE, HASH2INTBOXES> b){
+	return a.second < b.second;
+}
+
+void hash2string(char* str, const hash& h){
+	//convert first part to str
+	for (int i = 0; i < HASH1NUMBINS; i++){
+		int x;
+		x = sprintf(str, "%04X", h.hist_major[i]);
+		str += x;
+	}
+
+	//convert 2nd part to str
+	for (int i = 0; i < NUMBINS; i++){
+		for (int j = 0; j < NUMMAX; j++){
+			int x;
+			x = sprintf(str, "%02X", h.hist_minor[i][j].first);
+			str += x;
 		}
 	}
-	return c;
-}
-
-hash operator-=(hash a, hash b){
-	return a - b;
-}
-
-
-
-double magnitude(hash c){
-	double mag = 0;
-	for (int i = 0; i < 16; i++){
-		uint64_t z = c.data[i];
-		for (int j = 0; j < 16; j++){
-			double c1 = (double)(z & 0xF);
-			mag += (c1 / 16)*(c1 / 16);
-			z >>= 4;
+	for (int i = 0; i < NUMBINS; i++){
+		for (int j = 0; j < NUMMAX; j++){
+			int x;
+			x = sprintf(str, "%04X", h.hist_minor[i][j].second);
+			str += x;
 		}
 	}
-	return (mag) / 128;
-	//return std::sqrt(mag / (8 * 16 * 15*15));
 }
 
-double distance(hash a, hash b){
-	return magnitude(a - b);
-}
+void string2hash(char* str, const hash& h){
+	//convert first part to str
+	for (int i = 0; i < HASH1NUMBINS; i++){
+		int x;
+		x = sscanf(str, "%04X", &(h.hist_major[i]));
+		str += x;
+	}
 
+	//convert 2nd part to str
+	for (int i = 0; i < NUMBINS; i++){
+		for (int j = 0; j < NUMMAX; j++){
+			int x;
+			x = sscanf(str, "%02X", &(h.hist_minor[i][j].first));
+			str += x;
+		}
+	}
+	for (int i = 0; i < NUMBINS; i++){
+		for (int j = 0; j < NUMMAX; j++){
+			int x;
+			x = sscanf(str, "%04X", &(h.hist_minor[i][j].second));
+			str += x;
+		}
+	}
+}
 void imghash_algorithm(cv::Mat in, hash &hash){
 	cv::Mat small;
-	cv::cvtColor(in, small, CV_BGR2GRAY);
+	cv::cvtColor(in, in, CV_BGR2GRAY);
 	//normalize
 
 	double min, max;
-	cv::minMaxLoc(small, &min, &max);
+	//cv::minMaxLoc(in, &min, &max);
 
-	//small = (small - min) * (255.0 / (max - min));
+	//in = (in - min) * (255.0 / (max - min));
 	//cv::minMaxLoc(small, &min, &max);
 
-	cv::resize(small, small, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC);
-	//cv::GaussianBlur(small, small, cv::Size(3, 3), .7f, .7f);
+	cv::resize(in, small, cv::Size(HASH2IMGSIZE, HASH2IMGSIZE), 0, 0, cv::INTER_CUBIC);
+	cv::GaussianBlur(small, small, cv::Size(7, 7), 1.5f, 1.5f);
 	//cv::threshold(small, small, 120, 255, cv::THRESH_BINARY);
 	cv::MatND hist;
 	int channels = 0;
-	int histSize[] = { 4 };
+	int histSize[] = { HASH1NUMBINS };
 	float ranges[] = { 0, 256 };
 	const float* range_c[] = { ranges };
-	uint64_t *bin1 = &(hash.data[0]), *bin2 = &(hash.data[4]), *bin3 = &(hash.data[8]), *bin4 = &(hash.data[12]);
-	for (int i = 0; i < 16; i++){
-		hash.data[i] = 0;
+	cv::calcHist(&(in), 1, &channels, cv::Mat(), hist, 1, histSize, range_c);
+	//calculate 1st part of hash
+	int64_t total = in.size[0] * in.size[1];
+	for (int i = 0; i < HASH1NUMBINS; i++){
+		hash.hist_major[i] = (float_t)((double_t)hist.at<float>(i) / (double_t)total);
 	}
+	histSize[0] = NUMBINS;
+	std::vector<std::pair<HASH2INTTYPE, HASH2INTBOXES>> hist_storage[NUMBINS];
+	//HASH2INTTYPE hist_storage[NUMBINS][HASH2NUMBLOCKS];
 	//calc histogram of 4x4 blocks
-	for (int i = 0; i < 64; i++){
-		int x = i % 8, y = i / 8;
+	for (int i = 0; i < HASH2NUMBLOCKS; i++){
+		int x = i % HASH2WIDTH, y = i / HASH2WIDTH;
 		cv::Mat block = small(cv::Rect(x * 4, y * 4, 4, 4));
 		cv::calcHist(&(block), 1, &channels, cv::Mat(), hist, 1, histSize, range_c);
-		uint8_t a = (uint8_t)hist.at<float>(0), b = (uint8_t)hist.at<float>(1), c = (uint8_t)hist.at<float>(2), d = (uint8_t)hist.at<float>(3);
-		a = (a>15 ? 15 : a);
-		b = (b>15 ? 15 : b);
-		c = (c>15 ? 15 : c);
-		d = (d>15 ? 15 : d);
-		bin1[i / 16] <<= 4;
-		bin1[i / 16] |= (a);
-		bin2[i / 16] <<= 4;
-		bin2[i / 16] |= (b);
-		bin3[i / 16] <<= 4;
-		bin3[i / 16] |= (c);
-		bin4[i / 16] <<= 4;
-		bin4[i / 16] |= (d);
+		for (int j = 0; j < NUMBINS; j++){
+			hist_storage[j].push_back(std::pair<HASH2INTTYPE, HASH2INTBOXES>((HASH2INTTYPE)hist.at<float>(j),i));
+		}
+	}
+	for (int j = 0; j < NUMBINS; j++){
+		std::sort(hist_storage[j].begin(), hist_storage[j].end(),comp);
+		hist_storage[j].erase(hist_storage[j].begin() + NUMMAX, hist_storage[j].end());
+		std::sort(hist_storage[j].begin(), hist_storage[j].end(), comp2);
+		for (int i = 0; i < NUMMAX; i++){
+			hash.hist_minor[j][i] = hist_storage[j][i];
+		}
 	}
 }
 
@@ -107,7 +142,40 @@ double test(char* x, char* y){
 	hash a, b;
 	imghash_algorithm(m1, a);
 	imghash_algorithm(m2, b);
-	hash c = a - b;
-	double mag = magnitude(c);
-	return mag;
+	//hash c = a - b;
+	//double mag = magnitude(c);
+	return 0;
+}
+
+double distance_fast(hash a, hash b){
+	//Quickly test distance from 1st part of hash
+	float sumSq = 0;
+	for (int i = 0; i < HASH1NUMBINS; i++){
+		float dist = a.hist_major[i] - b.hist_major[i];
+		sumSq += dist*dist;
+	}
+	return sqrtf(sumSq);
+}
+
+
+double distance_accurate(hash a, hash b){
+	int numMatches = 0;
+	for (int i = 0; i < NUMBINS; i++){
+		int idx1 = 0, idx2 = 0;
+		while (idx1 < NUMMAX && idx2 < NUMMAX){
+			uint16_t x = a.hist_minor[i][idx1].second,
+				y = b.hist_minor[i][idx2].second;
+				//diff = std::abs(x - y);
+			if (x < y)
+				idx1++;
+			else if (x>y)
+				idx2++;
+			else{
+				numMatches++;
+				idx1++;
+				idx2++;
+			}
+		}
+	}
+	return (double)numMatches / (NUMBINS*NUMMAX);
 }

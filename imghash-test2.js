@@ -19,7 +19,10 @@ for(var i=0;i<imgs1.length;i++){
 	for(var j=0;j<imgs2.length;j++){
 		numTestsRun++;
 		//all should be false no similarity
-		var hash = imghash.imgdist(imgs1[i],imgs2[j]);
+		var hash = imghash.imghash(imgs1[i]);//imghash.imgdist(imgs1[i],imgs2[j]);
+		console.log(hash);
+		hash = imghash.imghash(imgs2[i]);
+		console.log(hash);
 		if(hash>sensitivity){
 			numTestsCorrect++;
 			//fs.appendFileSync(log_file,"Passed test:"+imgs1[i]+","+imgs2[j]+",dissimilar,"+hash+"\n");
@@ -27,8 +30,9 @@ for(var i=0;i<imgs1.length;i++){
 		else
 			fs.appendFileSync(log_file,"Failed test:"+imgs1[i]+","+imgs2[j]+",similar,"+hash+"\n");
 		update();
+		break;
 	}
-	
+	break;
 }
 function update(){
 	var freq = 10;
