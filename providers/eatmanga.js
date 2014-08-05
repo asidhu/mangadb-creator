@@ -14,21 +14,24 @@ var requestAPI = common.requestAPI;
 
 var EatManga_ROOTURL = "http://eatmanga.com";
 var EatManga_SERIESDIR = "http://eatmanga.com/Manga-Scan/";
-function EatManga_grabAll(success,failure){
+function EatManga_grabAll(req){
 	requestAPI(EatManga_SERIESDIR, function($){
 		var series =[];
 		$("table#updates th a").each(function(idx,ele){
-			series[series.length] = {
+			var entry = {
 				name: $(ele).text(),
 				url: EatManga_ROOTURL+$(ele).attr("href")
 			};
+			req.data(entry);
+			series[series.length] = entry;
 		});
-		success(series);
-	},failure);
+		series.name = module.exports.name;
+		req.done(series);
+	},function(e){req.error(e);});
 }
 
 // Get information for the series
-function EatManga_grabSeriesDetails(series,success,failure){
+function EatManga_grabSeriesDetails(series,req){
 	requestAPI(series.url, function($){
 			//get images
 			var imgs=$("td#info img");
@@ -89,12 +92,12 @@ function EatManga_grabSeriesDetails(series,success,failure){
 			}
 			
 			
-			success(series);
+			req.data(series);
 		
-	},failure);
+	},function(e){req.error(e);});
 }
 
-function EatManga_grabChapterPages(chapter,success,failure){
+function EatManga_grabChapterPages(chapter,req){
 	requestAPI(chapter.url, function($){
 			//find all pages
 			chapter.pages=[];
@@ -105,14 +108,14 @@ function EatManga_grabChapterPages(chapter,success,failure){
 				chapter.pages[chapter.pages.length] = EatManga_ROOTURL+$(ele).attr("value");
 			});
 			var img =$("img#eatmanga_image, img#eatmanga_image_big").attr("src");
-			chapter.imgs[chapter.pages[0]]=img;
-			success(chapter);
-	},failure);
+			chapter.imgs[0]=img;
+			req.data(chapter);
+	},function(e){req.error(e);});
 }
-function EatManga_extractImage(chapter,idx,success,failure){
+function EatManga_extractImage(chapter,idx,req){
 	requestAPI(chapter.pages[idx], function($){
 		var img =$("img#eatmanga_image, img#eatmanga_image_big").attr("src");
-		chapter.imgs[chapter.pages[idx]]=img;
-		success(img);
-	},failure);
+		chapter.imgs[idx]=img;
+		req.data(img);
+	},function(e){req.error(e);});
 }

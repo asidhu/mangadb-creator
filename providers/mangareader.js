@@ -1,7 +1,7 @@
 module.exports = {
 	name:"MangaReader",
 	numAttempts:10,
-	defaultTimeout:100,
+	defaultTimeout:500,
 	failureTimeouts:[500,10000,120000,300000],
 	grabAll:MangaReader_grabAll,
 	grabSeriesDetails:MangaReader_grabSeriesDetails,
@@ -14,22 +14,25 @@ var requestAPI = common.requestAPI;
 
 var MangaReader_ROOTURL = "http://www.mangareader.net";
 var MangaReader_SERIESDIR = "http://www.mangareader.net/alphabetical";
-function MangaReader_grabAll(success,failure){
+function MangaReader_grabAll(req){
 	requestAPI(MangaReader_SERIESDIR, function($){
 			var series =[];	
 			$("div.series_col div.series_alpha ul li a").each(function(idx,ele){
-				series[series.length] = {
+				var entry = {
 					name: $(ele).text(),
 					url: MangaReader_ROOTURL+$(ele).attr("href")
 				};
+				req.data(entry);
+				series[series.length] = entry;
 			});
-			success(series);
+			series.name = module.exports.name;
+			req.done(series);
 	
-	},failure);
+	},function(e){req.error(e);});
 }
 
 // Get information for the series
-function MangaReader_grabSeriesDetails( series,success,failure){
+function MangaReader_grabSeriesDetails( series,req){
 	requestAPI(series.url, function($){
 			//get images
 			var imgs=$("div#mangaimg img");
@@ -112,12 +115,12 @@ function MangaReader_grabSeriesDetails( series,success,failure){
 					console.log("WTF");
 				}
 			}
-			success(series);
+			req.data(series);
 	
-	},failure);
+	},function(e){req.error(e);});
 }
 
-function MangaReader_grabChapterPages(chapter,success,failure){
+function MangaReader_grabChapterPages(chapter,req){
 	requestAPI(chapter.url, function($){
 			//find all pages
 			chapter.pages=[];
@@ -128,15 +131,15 @@ function MangaReader_grabChapterPages(chapter,success,failure){
 				chapter.pages[chapter.pages.length] = MangaReader_ROOTURL+$(ele).attr("value");
 			});
 			var img =$("div#imgholder img").attr("src");
-			chapter.imgs[chapter.pages[0]]=img;
-			success(chapter);
-	},failure);
+			chapter.imgs[0]=img;
+			req.data(chapter);
+	},function(e){req.error(e);});
 }
 
-function MangaReader_extractImage(chapter,idx,success,failure){
+function MangaReader_extractImage(chapter,idx,req){
 	requestAPI(chapter.pages[idx], function($){
 		var img =$("div#imgholder img").attr("src");
-		chapter.imgs[chapter.pages[idx]]=img;
-		success(img);
-	},failure);
+		chapter.imgs[idx]=img;
+		req.data(img);
+	},function(e){req.error(e);});
 }

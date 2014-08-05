@@ -1,135 +1,158 @@
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+var util = require("util");
+var events = require("events");
 var providers = [
-	require("./providers/eatmanga.js"),
-	require("./providers/mangareader.js")
+	(require("./providers/eatmanga.js")),
+	(require("./providers/mangareader.js"))
 ];
+var handlers = initHandlers();
+function Request() {
+    events.EventEmitter.call(this);
+}
+
+util.inherits(Request, events.EventEmitter);
+
+Request.prototype.error = function(data) {
+    this.emit("error", data);
+}
+
+Request.prototype.done = function(data) {
+    this.emit("done", data);
+}
+Request.prototype.data = function(data) {
+    this.emit("data", data);
+}
+
+
+
 
 
 function clearAllPending(){
 	for(var i=0;i<providers.length;i++){
-		handlers[providers[i].name].clearRequests();
+		var h =handlers[providers[i].name];
+		h.clearRequests();
+		
 	}
 }
+
 
 function RequestQueue(){
 	this.provider = undefined;
 	this.queue = [];
-	this.attempts =0;
-	this.errors=[];
-	this.timerObject=undefined;
+	this.timerobject=undefined;
 	this.handleRequests= function(){
-		if(this.attempts>this.provider.numAttempts){
-			this.attempts=0;
-			this.errors=[];
-			options.reqhandler.erase(this.queue);// remove first item from queue
-		}
 		if(this.queue.length<=0){
-			this.timerObject=undefined;
+			this.timerobject=undefined;
 			return;
 		}
-		var handler = this;
 		var req = options.reqhandler.pop(this.queue);
-		var provider = req.provider;
-		var onfailtimeout = provider.failureTimeouts[this.attempts] || provider.failureTimeouts[provider.failureTimeouts.length-1] || provider.defaultTimeout || 500;
-		var onsuccesstimeout = provider.defaultTimeout || 500;
-		var success = function(arg){
-			handler.timerObject=setTimeout(function(){handler.handleRequests();},onsuccesstimeout);
-			options.reqhandler.erase(handler.queue);
-			req.success(arg);
-			handler.attempts=0;
-			handler.errors=[];
-		};
-		var failure = function(arg){
-			handler.timerObject=setTimeout(function(){handler.handleRequests();},onfailtimeout);
-			handler.errors.push(arg);
-			handler.attempts++;
-		};
-		switch(req.type){
-			case 1:
-				req.provider.grabAll(success,failure);
-				break;
-			case 2:
-				req.provider.grabSeriesDetails(req.args[0],success,failure);
-				break;
-			case 3:
-				req.provider.grabChapterPages(req.args[0],success,failure);
-				break;
-			case 4:
-				req.provider.extractImage(req.args[0],req.args[1],success,failure);
-				break;
-		}
+		req.func.apply(req,req.args);
+		options.reqhandler.erase(this.queue);
+		var handler = this;
+		this.timerobject = setTimeout(function(){handler.handleRequests();},this.provider.defaultTimeout);
 	};
 	this.pushRequest= function(req){
-		if(!this.timerObject){
-			var handler = this;
-			this.timerObject=setTimeout(function(){handler.handleRequests();},0);
+		var handler = this;
+		if(!this.timerobject){
+			this.timerobject = setTimeout(function(){handler.handleRequests();},this.provider.defaultTimeout);
 		}
 		this.queue.push(req);
 	};
-	this.clearRequests = function(req){
-		if(this.timerObject){
-			clearTimeout(this.timerObject);
-		}
+	this.clearRequests = function(){
 		this.queue=[];
-		this.attempts=0;
-		this.errors=[];
+		if(this.timerobject)
+			clearTimeout(this.timerobject);
 	};
 };
-var handlers = initHandlers();
-function initHandlers(){
-	var handlers={};
-	for(var i=0;i<providers.length;i++){
-		handlers[providers[i].name] = new RequestQueue();
-		handlers[providers[i].name].provider = providers[i];
-	}
-	return handlers;
-}
+
 
 
 /*
 	using these functions is safer because they use built in failsafes for each provider as well as attempt a request multiple times in case of a failure.
 */
-function grabAll(provider, success,failure){
-	var req = {
-		provider:provider,
-		type:1,
-		args:[],
-		success:success,
-		failure:failure,
-	};
+function grabAll(provider){
+	
+	var req = new Request();
+	req.func= provider.grabAll;
+	req.args=[req];
 	handlers[provider.name].pushRequest(req);
+	return req;
 }
 
-function grabSeriesDetails(provider, series, success,failure){
-	var req = {
-		provider:provider,
-		type:2,
-		args:[series],
-		success:success,
-		failure:failure,
-	};
+function grabSeriesDetails(provider, series){
+	if(!Array.isArray(series)){
+		series = [series];
+	}
+	var req = new Request();
+	req.func= provider.grabSeriesDetails;
+	req.args=[series[0],req];
+	req.list = [];
 	handlers[provider.name].pushRequest(req);
+	req.on("data", function(data){
+		req.list.push(data);
+		if(req.list.length>=series.length){
+			req.done(req.list);
+		}else{
+			req.args=[series[req.list.length],req];
+			handlers[provider.name].pushRequest(req);
+		}
+	});
+	return req;
 }
 
-function grabChapterPages(provider, chapter, success,failure){
-	var req = {
-		provider:provider,
-		type:3,
-		args:[chapter],
-		success:success,
-		failure:failure,
-	};
+function grabChapterPages(provider, chapter){
+	if(!Array.isArray(chapter)){
+		chapter = [chapter];
+	}
+	var req = new Request();
+	req.func= provider.grabChapterPages;
+	req.args=[chapter[0],req];
 	handlers[provider.name].pushRequest(req);
+	req.list = [];
+	req.on("data", function(data){
+		req.list.push(data);
+		if(req.list.length>=chapter.length){
+			req.done(req.list);
+		}else{
+			req.args=[chapter[req.list.length],req];
+			handlers[provider.name].pushRequest(req);
+		}
+	});
+	return req;
 }
-function extractImage(provider, chapter,idx, success,failure){
-	var req = {
-		provider:provider,
-		type:4,
-		args:[chapter,idx],
-		success:success,
-		failure:failure,
-	};
+function extractImage(provider, chapter,idx){
+	var req = new Request();
+	req.func= provider.extractImage;
 	handlers[provider.name].pushRequest(req);
+	if(!idx){
+		req.args=[chapter,0];
+		req.on("data", function(data){
+			req.list.push(data);
+			if(req.list.length>=chapter.pages.length){
+				req.done(req.list);
+			}else{
+				req.args=[chapter,req.list.length,req];
+				handlers[provider.name].pushRequest(req);
+			}
+		});
+	}
+	else{
+		req.args=[chapter,idx];
+	}
+	return req;
 }
 
 var FIFO ={
@@ -154,17 +177,47 @@ var LIFO ={
 var options= {
 	reqhandler:FIFO
 };
+
+function wrap(provider){
+	return {
+		prototype:provider,
+		grabAll:function(){return grabAll(provider);},
+		grabSeriesDetails:function(series){return grabSeriesDetails(provider,series);},
+		grabChapterPages:function(chapter){return grabAll(provider,chapter);},
+		extractImage:function(ch,idx){return extractImage(provider,ch,idx);}
+	};
+}
+
+function wrapall(providers){
+	var ret = [];
+	for(var i=0;i<providers.length;i++){
+		ret.push(wrap(providers[i]));
+	}
+	return ret;
+}
+function initHandlers(){
+	var handlers={};
+	for(var i=0;i<providers.length;i++){
+		handlers[providers[i].name] = new RequestQueue();
+		handlers[providers[i].name].provider = providers[i];
+	}
+	return handlers;
+}
+
+
 module.exports= {
 	LIFO:LIFO,
 	FIFO:FIFO,
 	options: options,
-	providers:providers,
+	providers:wrapall(providers),
 	grabAll:grabAll,
 	grabSeriesDetails:grabSeriesDetails,
 	grabChapterPages:grabChapterPages,
 	extractImage:extractImage,
 	clearAllPending:clearAllPending,
 };
+
+
 
 //Other providers to be added later
 //=========== mangahere.co EXPORTS
