@@ -180,7 +180,7 @@ function getimgs(series){
 		var provider = providers[i];
 		var chapters = fs.readdirSync(series+"/"+provider);
 		var provider_imgs=[];
-		for(var j=0;j<200;j++){
+		for(var j=0;j<2;j++){
 			var chapter =  chapters[j];
 			var chapter_imgs=[];
 			var imgs = fs.readdirSync(series+"/"+provider+"/"+chapter);

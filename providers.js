@@ -14,19 +14,26 @@
 
 var util = require("util");
 var events = require("events");
+var fs = require("fs");
+var request = require("request");
 var providers = [
 	(require("./providers/eatmanga.js")),
 	(require("./providers/mangareader.js"))
 ];
 var handlers = initHandlers();
 function Request() {
+	this.attempts=0;
     events.EventEmitter.call(this);
 }
 
 util.inherits(Request, events.EventEmitter);
 
 Request.prototype.error = function(data) {
-    this.emit("error", data);
+	if(this.attempts<=0){
+		this.emit("error", data);
+	}else{
+		this.handler.pushRequest(this);
+	}
 }
 
 Request.prototype.done = function(data) {
@@ -34,6 +41,10 @@ Request.prototype.done = function(data) {
 }
 Request.prototype.data = function(data) {
     this.emit("data", data);
+}
+Request.prototype.retry = function(num) {
+    this.attempts=num;
+	return this;
 }
 
 
@@ -88,6 +99,7 @@ function grabAll(provider){
 	var req = new Request();
 	req.func= provider.grabAll;
 	req.args=[req];
+	req.handler = handlers[provider.name];
 	handlers[provider.name].pushRequest(req);
 	return req;
 }
@@ -100,6 +112,7 @@ function grabSeriesDetails(provider, series){
 	req.func= provider.grabSeriesDetails;
 	req.args=[series[0],req];
 	req.list = [];
+	req.handler = handlers[provider.name];
 	handlers[provider.name].pushRequest(req);
 	req.on("data", function(data){
 		req.list.push(data);
@@ -120,6 +133,7 @@ function grabChapterPages(provider, chapter){
 	var req = new Request();
 	req.func= provider.grabChapterPages;
 	req.args=[chapter[0],req];
+	req.handler = handlers[provider.name];
 	handlers[provider.name].pushRequest(req);
 	req.list = [];
 	req.on("data", function(data){
@@ -136,9 +150,17 @@ function grabChapterPages(provider, chapter){
 function extractImage(provider, chapter,idx){
 	var req = new Request();
 	req.func= provider.extractImage;
+	req.handler = handlers[provider.name];
 	handlers[provider.name].pushRequest(req);
 	if(!idx){
-		req.args=[chapter,0];
+		if(chapter.imgs.length==1){
+			req.args=[chapter,1,req];
+			req.list = [chapter.imgs[0]];
+		}
+		else{
+			req.args=[chapter,0,req];
+			req.list = [];
+		}
 		req.on("data", function(data){
 			req.list.push(data);
 			if(req.list.length>=chapter.pages.length){
@@ -150,17 +172,43 @@ function extractImage(provider, chapter,idx){
 		});
 	}
 	else{
-		req.args=[chapter,idx];
+		req.args=[chapter,idx,req];
 	}
 	return req;
 }
 
+function downloadImage_helper(img,path,req){
+	request(img).pipe(fs.createWriteStream(path)).on("error",function(err){req.error(err);}).on("finish",function(){req.data(img);});
+}
+
+function downloadImage(provider, img, path){
+	if(!Array.isArray(img) && !Array.isArray(path)){
+		img = [img];
+		path = [path];
+	}
+	if(img.length!=path.length)return undefined;
+	var req = new Request();
+	req.func= downloadImage_helper;
+	req.handler = handlers[provider.name];
+	handlers[provider.name].pushRequest(req);
+	req.args=[img[0],path[0],req];
+	req.num=0;
+	req.on("data", function(data){
+		req.num++;
+		if(req.num>=img.length){
+			req.done();
+		}else{
+			req.args=[img[req.num],path[req.num],req];
+			handlers[provider.name].pushRequest(req);
+		}
+	});
+	return req;
+}
 var FIFO ={
 	pop:function(queue){
 		return queue[0];
 	},
 	erase:function(queue){
-	
 		queue.splice(0,1);
 	}
 };
@@ -175,16 +223,18 @@ var LIFO ={
 
 
 var options= {
-	reqhandler:FIFO
+	reqhandler:LIFO
 };
 
 function wrap(provider){
 	return {
-		prototype:provider,
+		name:provider.name,
+		defaultTimeout:provider.defaultTimeout,
 		grabAll:function(){return grabAll(provider);},
 		grabSeriesDetails:function(series){return grabSeriesDetails(provider,series);},
-		grabChapterPages:function(chapter){return grabAll(provider,chapter);},
-		extractImage:function(ch,idx){return extractImage(provider,ch,idx);}
+		grabChapterPages:function(chapter){return grabChapterPages(provider,chapter);},
+		extractImage:function(ch,idx){return extractImage(provider,ch,idx);},
+		downloadImage:function(img,path){return downloadImage(provider,img,path);}
 	};
 }
 

@@ -49,18 +49,42 @@ Handle<Value> HashDistance(const Arguments& args) {
 	HandleScope scope;
 	if (args.Length() < 2)
 		return scope.Close(Undefined());
-	if (!args[0]->IsObject() || !args[1]->IsObject())
+	if (!args[0]->IsObject())
 		return scope.Close(Undefined());
-
-	Handle<Object> arg1=(args[0]->ToObject());
-	Handle<Object> arg2=(args[1]->ToObject());
-	hash a, b;
-	js2hash(arg1, a);
-	js2hash(arg2, b);
-	double dist = distance_accurate(a, b);
-	if (dist==-1)
-		return scope.Close(Undefined());
-	return scope.Close(Number::New(dist));
+	if (args[1]->IsObject()){
+		Handle<Object> arg1 = (args[0]->ToObject());
+		Handle<Object> arg2 = (args[1]->ToObject());
+		hash a, b;
+		js2hash(arg1, a);
+		js2hash(arg2, b);
+		double dist = distance_accurate(a, b);
+		if (dist == -1)
+			return scope.Close(Undefined());
+		return scope.Close(Number::New(dist));
+	}
+	if (args[1]->IsArray()){
+		Handle<Object> arg1 = (args[0]->ToObject());
+		Handle<Array> arg2 = Local<Array>::Cast(args[1]);
+		Handle<Array> ret = Array::New(arg2->Length());
+		for (int i = 0; i < arg2->Length(); i++){
+			if (!arg2->Get(i)->IsObject())
+			{
+				ret->Set(i, Undefined());
+			}
+			else{
+				hash a, b;
+				js2hash(arg1, a);
+				js2hash(arg2->Get(i)->ToObject(), b);
+				double dist = distance_accurate(a, b);
+				if (dist == -1)
+					ret->Set(i, Undefined());
+				else
+					ret->Set(i, Number::New(dist));
+			}
+		}
+		return scope.Close(ret);
+	}
+	return scope.Close(Undefined());
 }
 
 

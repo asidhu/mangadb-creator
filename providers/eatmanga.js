@@ -101,7 +101,7 @@ function EatManga_grabChapterPages(chapter,req){
 	requestAPI(chapter.url, function($){
 			//find all pages
 			chapter.pages=[];
-			chapter.imgs={};
+			chapter.imgs=[];
 			var allPages=$("select#pages").first().find("option");
 			chapter.numpages = allPages.length;
 			allPages.each(function(idx,ele){
